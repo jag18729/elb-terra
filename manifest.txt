@@ -1,0 +1,29 @@
+ Prompt for New Claude Code Session on CIT 270 Project
+
+  I need help finalizing my CIT 270 Coffee Shop HTTPS project. I've successfully deployed a Coffee Shop website to Elastic Beanstalk with the
+   following configuration:
+
+  - Application name: coffee-shop
+  - Environment name: coffee-shop-env
+  - URL: http://coffee-shop-env.eba-h9d9kuyw.us-east-1.elasticbeanstalk.com
+  - Instance type: t3.small
+  - Web server: Apache
+  - IMDSv1: Enabled
+
+  However, I'm having issues with the HTTPS implementation. The site loads over HTTP but not HTTPS. I need help with:
+
+  1. Diagnosing why HTTPS isn't working correctly
+  2. Manually configuring the Apache server for HTTPS if needed
+  3. Setting up valid self-signed certificates
+  4. Ensuring HTTP to HTTPS redirection works
+  5. Verifying all CIT 270 requirements are met:
+    - Elastic Beanstalk deployment
+    - HTTPS implementation
+    - Apache web server (not Nginx)
+    - IMDSv1 enabled
+    - t3.small instance type
+
+  I've already set up the basic .ebextensions configurations for HTTPS but may need to SSH into the instance for manual configuration. The
+  current state includes a working website over HTTP but HTTPS is not yet functioning properly.
+
+  Please help me troubleshoot the HTTPS setup and ensure all project requirements are fully implemented and verifiable.
