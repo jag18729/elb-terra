@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: coffee-shop-website-garcia-rafael-2274088.s3-website-us-east-1.amazonaws.com
+            Id: S3Origin
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        Enabled: true
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        HttpVersion: http2
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+Outputs:
+  CloudFrontDomainName:
+    Description: "Domain name of the CloudFront distribution"
+    Value: \!GetAtt CloudFrontDistribution.DomainName

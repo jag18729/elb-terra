@@ -320,17 +320,3 @@ chown webapp:webapp $EFS_MOUNT_DIR
 EOT
 }
 
-# Output the Elastic Beanstalk environment URL
-output "elastic_beanstalk_url" {
-  value = aws_elastic_beanstalk_environment.eb_env.cname
-}
-
-# Output the RDS endpoint
-output "rds_endpoint" {
-  value = aws_elastic_beanstalk_environment.eb_env.endpoint_url
-}
-
-# Output the EFS ID
-output "efs_id" {
-  value = aws_efs_file_system.eb_efs.id
-}

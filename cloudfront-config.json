@@ -1,0 +1,57 @@
+{
+  "CallerReference": "1743395559",
+  "Origins": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "Id": "S3-Website",
+        "DomainName": "coffee-shop-website-garcia-rafael-2274088.s3-website-us-east-1.amazonaws.com",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 5
+        }
+      }
+    ]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "S3-Website",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": {
+      "Quantity": 2,
+      "Items": ["GET", "HEAD"],
+      "CachedMethods": {
+        "Quantity": 2,
+        "Items": ["GET", "HEAD"]
+      }
+    },
+    "Compress": true,
+    "DefaultTTL": 86400,
+    "MinTTL": 0,
+    "MaxTTL": 31536000,
+    "ForwardedValues": {
+      "QueryString": false,
+      "Cookies": {
+        "Forward": "none"
+      },
+      "Headers": {
+        "Quantity": 0
+      },
+      "QueryStringCacheKeys": {
+        "Quantity": 0
+      }
+    }
+  },
+  "Comment": "CloudFront for Coffee Shop Website",
+  "Enabled": true,
+  "DefaultRootObject": "index.html",
+  "PriceClass": "PriceClass_All",
+  "HttpVersion": "http2",
+  "IsIPV6Enabled": true
+}
