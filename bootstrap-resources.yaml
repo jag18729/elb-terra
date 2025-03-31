@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Bootstrap resources for Coffee Shop deployment'
+
+Parameters:
+  AppName:
+    Type: String
+    Default: coffee-shop
+    Description: Name for your Coffee Shop application
+
+Resources:
+  # Create a temporary S3 bucket to hold the application zip
+  BootstrapBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub ${AppName}-bootstrap-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter30Days
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # Lambda function to zip and upload S3Website directory
+  S3WebsitePackageFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import tempfile
+          import zipfile
+          import cfnresponse
+          import logging
+          import shutil
+          from urllib.request import urlopen
+          from urllib.error import URLError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          s3 = boto3.client('s3')
+
+          def download_website_files(temp_dir):
+              """Download website files from GitHub"""
+              try:
+                  # Download a sample coffee shop website from GitHub
+                  website_url = "https://github.com/cloudacademy/static-website-example/archive/refs/heads/master.zip"
+                  zip_path = os.path.join(temp_dir, "website.zip")
+                  
+                  logger.info(f"Downloading website from {website_url}")
+                  with urlopen(website_url) as response, open(zip_path, 'wb') as out_file:
+                      shutil.copyfileobj(response, out_file)
+                  
+                  # Extract the zip
+                  extract_dir = os.path.join(temp_dir, "extracted")
+                  os.makedirs(extract_dir, exist_ok=True)
+                  
+                  with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                      zip_ref.extractall(extract_dir)
+                  
+                  # Return the path to the extracted files
+                  return os.path.join(extract_dir, "static-website-example-master")
+              except URLError as e:
+                  logger.error(f"Error downloading website: {e}")
+                  raise
+
+          def create_application_zip(files_dir, temp_dir):
+              """Create application.zip from website files"""
+              zip_path = os.path.join(temp_dir, "application.zip")
+              
+              with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                  for root, dirs, files in os.walk(files_dir):
+                      for file in files:
+                          file_path = os.path.join(root, file)
+                          arcname = os.path.relpath(file_path, files_dir)
+                          zipf.write(file_path, arcname)
+              
+              return zip_path
+
+          def handler(event, context):
+              """Lambda handler function"""
+              logger.info(f"Received event: {event}")
+              
+              request_type = event['RequestType']
+              if request_type == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+              
+              properties = event['ResourceProperties']
+              bucket_name = properties['BucketName']
+              
+              try:
+                  temp_dir = tempfile.mkdtemp()
+                  
+                  # Download website files
+                  website_dir = download_website_files(temp_dir)
+                  
+                  # Create application zip
+                  zip_path = create_application_zip(website_dir, temp_dir)
+                  
+                  # Upload to S3
+                  logger.info(f"Uploading application.zip to {bucket_name}")
+                  s3.upload_file(zip_path, bucket_name, "application.zip")
+                  
+                  # Upload individual website files to the same bucket for S3 website
+                  logger.info(f"Uploading website files to {bucket_name}/website/")
+                  for root, dirs, files in os.walk(website_dir):
+                      for file in files:
+                          file_path = os.path.join(root, file)
+                          key = "website/" + os.path.relpath(file_path, website_dir)
+                          content_type = None
+                          
+                          if file.endswith('.html'):
+                              content_type = 'text/html'
+                          elif file.endswith('.css'):
+                              content_type = 'text/css'
+                          elif file.endswith('.js'):
+                              content_type = 'application/javascript'
+                          elif file.endswith('.jpg') or file.endswith('.jpeg'):
+                              content_type = 'image/jpeg'
+                          elif file.endswith('.png'):
+                              content_type = 'image/png'
+                              
+                          extra_args = {'ContentType': content_type} if content_type else {}
+                          s3.upload_file(file_path, bucket_name, key, ExtraArgs=extra_args)
+                  
+                  response_data = {
+                      'BucketName': bucket_name,
+                      'ApplicationZipKey': 'application.zip',
+                      'WebsitePrefix': 'website/'
+                  }
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+              
+              except Exception as e:
+                  logger.error(f"Error: {e}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
+              
+              finally:
+                  # Clean up temp directory
+                  if 'temp_dir' in locals():
+                      shutil.rmtree(temp_dir)
+
+  # IAM role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource:
+                  - !Sub arn:aws:s3:::${BootstrapBucket}/*
+
+  # Custom resource to create application.zip
+  CreateApplicationZip:
+    Type: Custom::ApplicationZip
+    DependsOn: BootstrapBucket
+    Properties:
+      ServiceToken: !GetAtt S3WebsitePackageFunction.Arn
+      BucketName: !Ref BootstrapBucket
+
+Outputs:
+  BootstrapBucketName:
+    Description: Name of the bootstrap bucket containing application.zip
+    Value: !Ref BootstrapBucket
+  
+  ApplicationZipKey:
+    Description: Key for the application.zip file
+    Value: application.zip

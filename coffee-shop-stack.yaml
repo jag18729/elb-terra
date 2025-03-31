@@ -1,0 +1,405 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Coffee Shop Website with Elastic Beanstalk, RDS MySQL, and EFS'
+
+Parameters:
+  # ONLY PARAMETERS YOU NEED TO CHANGE
+  AppName:
+    Type: String
+    Default: coffee-shop
+    Description: Name for your Coffee Shop application
+  
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: ENTER A STRONG PASSWORD for the MySQL database
+    MinLength: 8
+    ConstraintDescription: Must be at least 8 characters
+  
+  # These parameters will be automatically determined
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: Environment type (dev, test, or prod)
+
+Resources:
+  # VPC and Networking - Auto Created
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-igw
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-public-subnet-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-public-subnet-2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-private-subnet-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-private-subnet-2
+  
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-public-routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-nat-1
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-private-routes-1
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet2
+
+  # S3 Website Bucket
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AppName}-website-${AWS::AccountId}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        IgnorePublicAcls: false
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-website
+
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:s3:::${WebsiteBucket}/*'
+            Principal: '*'
+
+  # EFS for Shared Storage
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EFS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-efs-sg
+
+  ElasticFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      PerformanceMode: generalPurpose
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub ${AppName}-efs
+
+  MountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref ElasticFileSystem
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  MountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref ElasticFileSystem
+      SubnetId: !Ref PrivateSubnet2
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  # Database & Application
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-db-subnet-group
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS MySQL
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-db-sg
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-web-sg
+
+  # Application Version Bucket
+  AppVersionBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AppName}-app-versions-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-app-versions
+
+  # Elastic Beanstalk Application
+  ElasticBeanstalkApp:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Ref AppName
+      Description: !Sub ${AppName} Coffee Shop Application
+
+  ElasticBeanstalkAppVersion:
+    Type: AWS::ElasticBeanstalk::ApplicationVersion
+    Properties:
+      ApplicationName: !Ref ElasticBeanstalkApp
+      Description: !Sub ${AppName} Initial Version
+      SourceBundle:
+        S3Bucket: !Sub ${AppName}-bootstrap-${AWS::AccountId}
+        S3Key: application.zip
+
+  ElasticBeanstalkEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref ElasticBeanstalkApp
+      EnvironmentName: !Sub ${AppName}-${EnvironmentName}
+      SolutionStackName: "64bit Amazon Linux 2 v3.5.3 running PHP 8.0"
+      VersionLabel: !Ref ElasticBeanstalkAppVersion
+      OptionSettings:
+        # VPC Configuration
+        - Namespace: aws:ec2:vpc
+          OptionName: VPCId
+          Value: !Ref VPC
+        - Namespace: aws:ec2:vpc
+          OptionName: Subnets
+          Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+        - Namespace: aws:ec2:vpc
+          OptionName: ELBSubnets
+          Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+
+        # Instance Configuration
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: IamInstanceProfile
+          Value: LabRole
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: SecurityGroups
+          Value: !Ref WebServerSecurityGroup
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: InstanceType
+          Value: t3.small
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: DisableIMDSv1
+          Value: false
+
+        # Load Balancer
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: EnvironmentType
+          Value: LoadBalanced
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: LoadBalancerType
+          Value: application
+
+        # Auto Scaling
+        - Namespace: aws:autoscaling:asg
+          OptionName: MinSize
+          Value: 1
+        - Namespace: aws:autoscaling:asg
+          OptionName: MaxSize
+          Value: 2
+
+        # EFS Configuration
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: EFS_FILE_SYSTEM_ID
+          Value: !Ref ElasticFileSystem
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: EFS_MOUNT_DIRECTORY
+          Value: /var/app/efs
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: S3_WEBSITE_URL
+          Value: !GetAtt WebsiteBucket.WebsiteURL
+
+        # Database Configuration
+        - Namespace: aws:rds:dbinstance
+          OptionName: DBEngine
+          Value: mysql
+        - Namespace: aws:rds:dbinstance
+          OptionName: DBEngineVersion
+          Value: 8.0
+        - Namespace: aws:rds:dbinstance
+          OptionName: DBInstanceClass
+          Value: db.t3.small
+        - Namespace: aws:rds:dbinstance
+          OptionName: DBUser
+          Value: dbadmin
+        - Namespace: aws:rds:dbinstance
+          OptionName: DBPassword
+          Value: !Ref DBPassword
+        - Namespace: aws:rds:dbinstance
+          OptionName: DBAllocatedStorage
+          Value: 5
+        - Namespace: aws:rds:dbinstance
+          OptionName: DBDeletionPolicy
+          Value: Delete
+
+Outputs:
+  WebsiteURL:
+    Description: URL for the S3 website
+    Value: !GetAtt WebsiteBucket.WebsiteURL
+
+  ElasticBeanstalkURL:
+    Description: URL for the Elastic Beanstalk environment
+    Value: !GetAtt ElasticBeanstalkEnvironment.EndpointURL
+
+  EFSID:
+    Description: ID of the EFS file system
+    Value: !Ref ElasticFileSystem
+
+  VPCId:
+    Description: ID of the VPC
+    Value: !Ref VPC

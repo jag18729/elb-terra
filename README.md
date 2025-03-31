@@ -1,127 +1,70 @@
-# Coffee Shop Website - Elastic Beanstalk with MySQL and EFS
+# SIMPLE AWS COFFEE SHOP DEPLOYMENT
 
-This Terraform project deploys a coffee shop website to AWS using:
-- S3 for static website hosting (front-end)
-- Elastic Beanstalk for dynamic content (back-end)
-- MySQL/MariaDB database
-- EFS (Elastic File System) for persistent shared storage
+This project deploys a complete coffee shop application to AWS using CloudFormation.
 
-## Prerequisites
+## ULTRA-SIMPLE DEPLOYMENT METHOD
 
-- Terraform installed (v1.0.0 or newer)
-- AWS CLI configured with your Vocarium Lab credentials
-- Access to your Vocarium AWS Lab environment
+### ONLY TWO STEPS!
 
-## QUICK START CONFIGURATION GUIDE
+1. Upload the `bootstrap-resources.yaml` template in CloudFormation
+2. Upload the `coffee-shop-stack.yaml` template in CloudFormation
 
-### STEP 1: GATHER YOUR AWS INFORMATION
+That's it! Everything else will be created automatically.
 
-Before editing any files, collect the following information from your AWS Console:
+## WHAT'S INCLUDED
 
-1. **VPC ID** 
-   - Go to AWS Console → VPC → Your VPCs
-   - Copy your VPC ID (format: vpc-xxxxxxxxxxxxxxxxx)
-
-2. **Subnet IDs**
-   - Go to AWS Console → VPC → Subnets
-   - Identify at least 2 PRIVATE subnets (in different AZs)
-   - Identify at least 2 PUBLIC subnets (in different AZs)
-   - Copy all subnet IDs (format: subnet-xxxxxxxxxxxxxxxxx)
-
-3. **Choose Unique Bucket Names**
-   - Create two globally unique S3 bucket names by adding your student ID or other identifier
-   - Example: "coffee-shop-app-deployment-student123"
-   - Example: "coffee-shop-website-bucket-student123"
-
-### STEP 2: UPDATE terraform.tfvars FILE
-
-Open the `terraform.tfvars` file and REPLACE ALL CAPITALIZED VALUES with information from Step 1:
-
-```
-# Find and replace ALL CAPITALIZED text with your values
-app_version_bucket_name = "UNIQUE-NAME-FOR-APP-DEPLOYMENT-BUCKET"
-website_bucket_name = "UNIQUE-NAME-FOR-WEBSITE-BUCKET"
-db_password = "CHANGE-TO-SECURE-PASSWORD"
-vpc_id = "REPLACE-WITH-YOUR-VPC-ID"
-subnet_ids = ["PRIVATE-SUBNET-ID-1", "PRIVATE-SUBNET-ID-2"]
-elb_subnet_ids = ["PUBLIC-SUBNET-ID-1", "PUBLIC-SUBNET-ID-2"]
-efs_subnet_ids = ["PRIVATE-SUBNET-ID-1", "PRIVATE-SUBNET-ID-2"]
-```
-
-### STEP 3: DEPLOYMENT
-
-Open your terminal in the project directory and run:
-
-1. Initialize Terraform:
-   ```
-   terraform init
-   ```
-
-2. Preview the deployment plan:
-   ```
-   terraform plan
-   ```
-
-3. Apply the configuration:
-   ```
-   terraform apply
-   ```
-   - Type "yes" when prompted to confirm
-
-4. After deployment completes, find your website URLs:
-   ```
-   terraform output website_url        # S3 front-end website
-   terraform output elastic_beanstalk_url  # Elastic Beanstalk URL
-   ```
-
-## Architecture Details
-
+- **Complete Coffee Shop Website**
 - **Front-end:** Static website hosted on S3
-  - Complete coffee shop catalog
-  - Product browsing pages
-  - Coffee bean information
-
 - **Back-end:** Elastic Beanstalk PHP application
-  - PHP 8.0 on Amazon Linux 2
-  - Integrates with MySQL database
-  - Burstable t3.small instance type
-  - Elastic Load Balancer for traffic distribution
-
-- **Database:** MySQL 8.0
-  - t3.small instance
-  - 5GB allocated storage
-  - Manages product inventory and orders
-
+- **Database:** MySQL 8.0 database
 - **Storage:** EFS for shared persistence
-  - Mounted at `/var/app/efs` 
-  - EFS mount points in each Availability Zone
-  - Shared access across all application instances
 
-- **Security Features:**
-  - IMDSv1 enabled (as required for lab)
-  - Security groups for EFS access
-  - Dev/test environment configuration
+## DETAILED INSTRUCTIONS
 
-## Cleanup
+For complete step-by-step instructions, see:
+**[DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)**
 
-When you're finished with the lab, destroy all resources to avoid charges:
-```
-terraform destroy
-```
-Type "yes" when prompted to confirm deletion.
+## ONLY TWO THINGS YOU NEED TO PROVIDE:
 
-## Troubleshooting
+1. **A NAME** for your coffee shop application
+2. **A PASSWORD** for the MySQL database
 
-If you encounter issues during deployment:
+## HOW IT WORKS
 
-1. **VPC/Subnet Problems:**
-   - Verify you've entered the correct VPC and subnet IDs
-   - Ensure subnets are in different Availability Zones
+1. **First Template (`bootstrap-resources.yaml`):**
+   - Creates a bootstrap S3 bucket
+   - Runs a Lambda function that packages and uploads the application
+   - Prepares everything needed for the main stack
 
-2. **S3 Bucket Name Conflicts:**
-   - If bucket creation fails, choose different unique names
-   - S3 bucket names must be globally unique across all AWS accounts
+2. **Second Template (`coffee-shop-stack.yaml`):**
+   - Creates ALL infrastructure:
+     - VPC with public/private subnets
+     - Security groups
+     - S3 website bucket
+     - Elastic Beanstalk environment
+     - RDS MySQL database
+     - EFS for shared storage
 
-3. **Permission Issues:**
-   - Confirm your Vocarium Lab has sufficient permissions
-   - The "LabRole" instance profile should have appropriate access
+## NO CONFIGURATION NEEDED!
+
+This deployment uses CloudFormation's intrinsic functions like `!Ref`, `!Sub`, `!GetAtt` 
+to automatically configure everything. The templates:
+
+- Auto-create all networking components
+- Generate unique resource names
+- Connect all components together
+- Set up proper security
+
+## GETTING STARTED
+
+1. Open the AWS Console
+2. Go to CloudFormation
+3. Follow instructions in **[DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)**
+
+## ADVANCED USERS
+
+If you want to upload the templates to your own S3 bucket and generate direct links:
+
+1. Edit the `cfn-upload.sh` script with your bucket name
+2. Run the script to upload templates and generate links
+3. Use the quick-create links to launch stacks
