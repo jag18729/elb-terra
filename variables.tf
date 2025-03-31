@@ -21,8 +21,8 @@ variable "app_version_bucket_name" {
   type        = string
 }
 
-variable "app_source_zip" {
-  description = "Path to the application ZIP file"
+variable "website_bucket_name" {
+  description = "Name of the S3 bucket to host the website (must be globally unique)"
   type        = string
 }
 

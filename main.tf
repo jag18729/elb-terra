@@ -7,12 +7,98 @@ resource "aws_s3_bucket" "app_version_bucket" {
   bucket = var.app_version_bucket_name
 }
 
+# Create S3 bucket for the website content
+resource "aws_s3_bucket" "website_bucket" {
+  bucket = var.website_bucket_name
+}
+
+# Enable website hosting on the S3 bucket
+resource "aws_s3_bucket_website_configuration" "website" {
+  bucket = aws_s3_bucket.website_bucket.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "index.html"
+  }
+}
+
+# Make S3 bucket public
+resource "aws_s3_bucket_public_access_block" "website_public" {
+  bucket = aws_s3_bucket.website_bucket.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+# S3 bucket policy to allow public read access
+resource "aws_s3_bucket_policy" "website_policy" {
+  bucket = aws_s3_bucket.website_bucket.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.website_bucket.arn}/*"
+      },
+    ]
+  })
+  depends_on = [aws_s3_bucket_public_access_block.website_public]
+}
+
+# Upload website files to S3
+resource "aws_s3_object" "website_files" {
+  for_each = fileset("${path.module}/S3Website", "**/*")
+  
+  bucket = aws_s3_bucket.website_bucket.id
+  key    = each.value
+  source = "${path.module}/S3Website/${each.value}"
+  etag   = filemd5("${path.module}/S3Website/${each.value}")
+  content_type = lookup(local.mime_types, regex("\\.[^.]+$", each.value), null)
+}
+
+locals {
+  mime_types = {
+    ".html" = "text/html"
+    ".css"  = "text/css"
+    ".js"   = "application/javascript"
+    ".json" = "application/json"
+    ".png"  = "image/png"
+    ".jpg"  = "image/jpeg"
+    ".jpeg" = "image/jpeg"
+    ".ico"  = "image/x-icon"
+  }
+  
+  # Create a zip of the S3Website directory for Elastic Beanstalk
+  app_zip_path = "${path.module}/application.zip"
+}
+
+# The script to create the application zip
+resource "null_resource" "create_app_zip" {
+  triggers = {
+    # Trigger on any change to the S3Website files
+    website_files = sha256(join("", [for f in fileset("${path.module}/S3Website", "**/*") : filesha256("${path.module}/S3Website/${f}")]))
+  }
+
+  provisioner "local-exec" {
+    command = "cd ${path.module} && mkdir -p tmp-package && cp -r S3Website/* tmp-package/ && cd tmp-package && zip -r ../${basename(local.app_zip_path)} * && cd .. && rm -rf tmp-package"
+  }
+}
+
 # Upload application zip to S3
 resource "aws_s3_object" "app_version" {
   bucket = aws_s3_bucket.app_version_bucket.id
   key    = "${var.app_name}-${var.app_version}.zip"
-  source = var.app_source_zip
-  etag   = filemd5(var.app_source_zip)
+  source = local.app_zip_path
+  etag   = fileexists(local.app_zip_path) ? filemd5(local.app_zip_path) : md5(timestamp())
+  depends_on = [null_resource.create_app_zip]
 }
 
 # Elastic Beanstalk application
@@ -76,6 +162,13 @@ resource "aws_elastic_beanstalk_environment" "eb_env" {
   application         = aws_elastic_beanstalk_application.eb_app.name
   solution_stack_name = "64bit Amazon Linux 2 v3.5.3 running PHP 8.0"
   version_label       = aws_elastic_beanstalk_application_version.eb_app_version.name
+  
+  # Pass the S3 website URL to the application
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "S3_WEBSITE_URL"
+    value     = "http://${aws_s3_bucket_website_configuration.website.website_endpoint}"
+  }
 
   setting {
     namespace = "aws:autoscaling:launchconfiguration"

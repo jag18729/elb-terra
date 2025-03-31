@@ -19,6 +19,11 @@ output "app_bucket" {
   value       = aws_s3_bucket.app_version_bucket.bucket
 }
 
+output "website_url" {
+  description = "S3 website URL"
+  value       = "http://${aws_s3_bucket_website_configuration.website.website_endpoint}"
+}
+
 output "app_version" {
   description = "Application version label"
   value       = aws_elastic_beanstalk_application_version.eb_app_version.name

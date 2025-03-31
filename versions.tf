@@ -7,4 +7,12 @@ terraform {
       version = "~> 4.0"
     }
   }
+  
+  # Uncomment this block if you want to use Terraform Cloud
+  # backend "remote" {
+  #   organization = "YOUR-ORGANIZATION-NAME"
+  #   workspaces {
+  #     name = "coffee-shop-infrastructure"
+  #   }
+  # }
 }
