@@ -1,0 +1,7 @@
+{
+    "appName": "coffee-shop",
+    "dbPassword": "CHANGE-ME-TO-SECURE-PASSWORD",
+    "enableCustomDomain": false,
+    "domainName": "",
+    "environment": "dev"
+}

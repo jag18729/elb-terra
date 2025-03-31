@@ -1,85 +1,113 @@
-# SECURE COFFEE SHOP DEPLOYMENT WITH HTTPS
+# COFFEE SHOP DEPLOYMENT WITH HTTPS AND CLI AUTOMATION
 
-Deploy a complete coffee shop application with HTTPS support using CloudFormation.
+Deploy a complete coffee shop application with HTTPS support using CloudFormation and CLI automation.
 
-## DEPLOYMENT OPTIONS
+## FULLY AUTOMATED CLI DEPLOYMENT (RECOMMENDED)
 
-### OPTION 1: SIMPLE CONSOLE DEPLOYMENT
-1. Upload the `bootstrap-resources.yaml` template in CloudFormation console
-2. Upload the `coffee-shop-stack.yaml` template in CloudFormation console
-3. Follow the step-by-step guide in [DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)
+```bash
+# Make deployment script executable
+chmod +x deploy.sh
 
-### OPTION 2: SECURE CLI DEPLOYMENT (RECOMMENDED)
-1. Set up AWS CLI following [AWS-CLI-SETUP.md](AWS-CLI-SETUP.md)
-2. Run the secure deployment script: `./secure-deployment.sh`
-3. Edit the generated parameters file with your secure values
-4. Run the deployment script: `./deploy.sh`
+# Run the script (creates config file template on first run)
+./deploy.sh
+
+# Edit config with your database password and domain settings
+vim deployment-config.json
+
+# Deploy with the updated config
+./deploy.sh --region us-east-1 --yes
+```
+
+For complete CLI options and examples, see [CLI-USAGE.md](CLI-USAGE.md)
 
 ## WHAT'S INCLUDED
 
 - **Complete Coffee Shop Website**
 - **Front-end:** Static website hosted on S3
-- **Back-end:** Elastic Beanstalk PHP application
+- **Back-end:** Elastic Beanstalk PHP application  
 - **Database:** MySQL 8.0 database
-- **Storage:** EFS for shared persistence
-- **HTTPS Support:** CloudFront with custom domain and SSL/TLS
+- **Storage:** EFS for persistent storage
+- **HTTPS Support:** CloudFront with SSL/TLS
+- **Full CLI Automation:** Zero AWS console interaction needed
 
-## HTTPS CONFIGURATION
+## FEATURES
 
-For secure HTTPS setup with your custom domain:
+### Comprehensive CLI Automation
 
-1. Set `EnableCustomDomain` to `true` when deploying
-2. Provide your domain name (e.g., yourdomain.com)
-3. Follow detailed instructions in [HTTPS-SETUP.md](HTTPS-SETUP.md)
+- Modular deployment script with robust error handling
+- JSON configuration for all deployment parameters 
+- Detailed logging with timestamps
+- Automatic credential validation
+- Stack event troubleshooting information
+- Support for create/update/delete operations
 
-## SECURITY FEATURES
+### HTTPS with Custom Domain
 
-This deployment includes several security features:
+For secure HTTPS with your domain:
 
-- **Secure Parameter Handling:** Sensitive values stored in secure parameter files
-- **Proper .gitignore:** Prevents committing sensitive files
+1. Edit `deployment-config.json`:
+```json
+{
+    "appName": "coffee-shop",
+    "dbPassword": "YOUR-SECURE-PASSWORD",
+    "enableCustomDomain": true,
+    "domainName": "yourdomain.com",
+    "environment": "prod"
+}
+```
+
+2. Deploy with CLI:
+```bash
+./deploy.sh --yes
+```
+
+3. Follow certificate validation steps in [HTTPS-SETUP.md](HTTPS-SETUP.md)
+
+### Security Features
+
+- **Secure Parameter Handling:** JSON configuration outside git
+- **Comprehensive .gitignore:** Prevents credential leakage
 - **Encrypted Database:** RDS with encryption enabled
-- **Encrypted File System:** EFS with encryption enabled
-- **SSL/TLS Support:** Secure HTTPS connections
-- **Secure Security Groups:** Minimal required access
+- **Encrypted File Storage:** EFS with encryption enabled
+- **Proper Security Groups:** Least privilege access
+- **HTTPS Support:** SSL/TLS for secure connections
 
 ## DOCUMENTATION
 
-- **[DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)** - Step-by-step deployment guide
-- **[AWS-CLI-SETUP.md](AWS-CLI-SETUP.md)** - Secure AWS CLI configuration
-- **[HTTPS-SETUP.md](HTTPS-SETUP.md)** - Custom domain and HTTPS setup
+- **[CLI-USAGE.md](CLI-USAGE.md)** - Complete CLI usage guide
+- **[AWS-CLI-SETUP.md](AWS-CLI-SETUP.md)** - AWS CLI configuration
+- **[HTTPS-SETUP.md](HTTPS-SETUP.md)** - Custom domain setup
+- **[DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)** - Console deployment (alternative)
 
-## HOW IT WORKS
+## ARCHITECTURE
 
-1. **First Template (`bootstrap-resources.yaml`):**
-   - Creates a bootstrap S3 bucket
-   - Runs a Lambda function that packages and uploads the application
-   - Prepares everything needed for the main stack
+1. **Bootstrap Stack:**
+   - Creates S3 bucket
+   - Runs Lambda function to package application
+   - Uses CloudFormation intrinsic functions (`!Ref`, `!Sub`, `!GetAtt`)
 
-2. **Second Template (`coffee-shop-stack.yaml`):**
-   - Creates ALL infrastructure using CloudFormation's intrinsic functions
-   - No manual configuration of networking components required
-   - Automatically sets up HTTPS if a custom domain is provided
+2. **Main Application Stack:**
+   - Creates full infrastructure automatically:
+     - VPC with public/private subnets
+     - Security groups and networking
+     - S3 website bucket with proper content types
+     - Elastic Beanstalk application with RDS
+     - EFS for shared storage
+     - CloudFront with SSL/TLS (when enabled)
 
-## GETTING STARTED
+## VIM USERS
 
-The fastest way to get started securely:
+The deployment script is compatible with Vim workflows:
 
 ```bash
-# Clone this repository
-git clone <repository-url>
-
-# Make the script executable
-chmod +x secure-deployment.sh
-
-# Run the secure setup script
-./secure-deployment.sh
-
-# Edit the parameters file with your values
-nano coffee-shop-parameters.json
-
-# Deploy using the generated script
+# Generate default config
 ./deploy.sh
+
+# Edit with Vim
+vim deployment-config.json
+
+# Deploy with options
+./deploy.sh --mode update --region us-west-2
 ```
 
-IMPORTANT: See [AWS-CLI-SETUP.md](AWS-CLI-SETUP.md) for secure credential management!
+See [CLI-USAGE.md](CLI-USAGE.md#vim-users) for Vim-specific tips.

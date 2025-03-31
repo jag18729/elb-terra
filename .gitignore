@@ -29,3 +29,23 @@ terraform.rc
 
 # Ignore .terraform.lock.hcl
 .terraform.lock.hcl
+
+# CloudFormation Deployment Files
+coffee-shop-parameters.json
+*-parameters.json
+cloudformation-packaged.yaml
+
+# AWS Credentials
+.aws/
+aws.config
+aws.credentials
+*.pem
+
+# Runtime logs
+*.log
+deployment-logs/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
