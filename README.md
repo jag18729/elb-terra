@@ -1,15 +1,19 @@
-# SIMPLE AWS COFFEE SHOP DEPLOYMENT
+# SECURE COFFEE SHOP DEPLOYMENT WITH HTTPS
 
-This project deploys a complete coffee shop application to AWS using CloudFormation.
+Deploy a complete coffee shop application with HTTPS support using CloudFormation.
 
-## ULTRA-SIMPLE DEPLOYMENT METHOD
+## DEPLOYMENT OPTIONS
 
-### ONLY TWO STEPS!
+### OPTION 1: SIMPLE CONSOLE DEPLOYMENT
+1. Upload the `bootstrap-resources.yaml` template in CloudFormation console
+2. Upload the `coffee-shop-stack.yaml` template in CloudFormation console
+3. Follow the step-by-step guide in [DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)
 
-1. Upload the `bootstrap-resources.yaml` template in CloudFormation
-2. Upload the `coffee-shop-stack.yaml` template in CloudFormation
-
-That's it! Everything else will be created automatically.
+### OPTION 2: SECURE CLI DEPLOYMENT (RECOMMENDED)
+1. Set up AWS CLI following [AWS-CLI-SETUP.md](AWS-CLI-SETUP.md)
+2. Run the secure deployment script: `./secure-deployment.sh`
+3. Edit the generated parameters file with your secure values
+4. Run the deployment script: `./deploy.sh`
 
 ## WHAT'S INCLUDED
 
@@ -18,16 +22,32 @@ That's it! Everything else will be created automatically.
 - **Back-end:** Elastic Beanstalk PHP application
 - **Database:** MySQL 8.0 database
 - **Storage:** EFS for shared persistence
+- **HTTPS Support:** CloudFront with custom domain and SSL/TLS
 
-## DETAILED INSTRUCTIONS
+## HTTPS CONFIGURATION
 
-For complete step-by-step instructions, see:
-**[DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)**
+For secure HTTPS setup with your custom domain:
 
-## ONLY TWO THINGS YOU NEED TO PROVIDE:
+1. Set `EnableCustomDomain` to `true` when deploying
+2. Provide your domain name (e.g., yourdomain.com)
+3. Follow detailed instructions in [HTTPS-SETUP.md](HTTPS-SETUP.md)
 
-1. **A NAME** for your coffee shop application
-2. **A PASSWORD** for the MySQL database
+## SECURITY FEATURES
+
+This deployment includes several security features:
+
+- **Secure Parameter Handling:** Sensitive values stored in secure parameter files
+- **Proper .gitignore:** Prevents committing sensitive files
+- **Encrypted Database:** RDS with encryption enabled
+- **Encrypted File System:** EFS with encryption enabled
+- **SSL/TLS Support:** Secure HTTPS connections
+- **Secure Security Groups:** Minimal required access
+
+## DOCUMENTATION
+
+- **[DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)** - Step-by-step deployment guide
+- **[AWS-CLI-SETUP.md](AWS-CLI-SETUP.md)** - Secure AWS CLI configuration
+- **[HTTPS-SETUP.md](HTTPS-SETUP.md)** - Custom domain and HTTPS setup
 
 ## HOW IT WORKS
 
@@ -37,34 +57,29 @@ For complete step-by-step instructions, see:
    - Prepares everything needed for the main stack
 
 2. **Second Template (`coffee-shop-stack.yaml`):**
-   - Creates ALL infrastructure:
-     - VPC with public/private subnets
-     - Security groups
-     - S3 website bucket
-     - Elastic Beanstalk environment
-     - RDS MySQL database
-     - EFS for shared storage
-
-## NO CONFIGURATION NEEDED!
-
-This deployment uses CloudFormation's intrinsic functions like `!Ref`, `!Sub`, `!GetAtt` 
-to automatically configure everything. The templates:
-
-- Auto-create all networking components
-- Generate unique resource names
-- Connect all components together
-- Set up proper security
+   - Creates ALL infrastructure using CloudFormation's intrinsic functions
+   - No manual configuration of networking components required
+   - Automatically sets up HTTPS if a custom domain is provided
 
 ## GETTING STARTED
 
-1. Open the AWS Console
-2. Go to CloudFormation
-3. Follow instructions in **[DEPLOY-INSTRUCTIONS.md](DEPLOY-INSTRUCTIONS.md)**
+The fastest way to get started securely:
 
-## ADVANCED USERS
+```bash
+# Clone this repository
+git clone <repository-url>
 
-If you want to upload the templates to your own S3 bucket and generate direct links:
+# Make the script executable
+chmod +x secure-deployment.sh
 
-1. Edit the `cfn-upload.sh` script with your bucket name
-2. Run the script to upload templates and generate links
-3. Use the quick-create links to launch stacks
+# Run the secure setup script
+./secure-deployment.sh
+
+# Edit the parameters file with your values
+nano coffee-shop-parameters.json
+
+# Deploy using the generated script
+./deploy.sh
+```
+
+IMPORTANT: See [AWS-CLI-SETUP.md](AWS-CLI-SETUP.md) for secure credential management!

@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Coffee Shop Website with Elastic Beanstalk, RDS MySQL, and EFS'
 
 Parameters:
-  # ONLY PARAMETERS YOU NEED TO CHANGE
+  # REQUIRED PARAMETERS YOU NEED TO CHANGE
   AppName:
     Type: String
     Default: coffee-shop
@@ -15,6 +15,20 @@ Parameters:
     MinLength: 8
     ConstraintDescription: Must be at least 8 characters
   
+  # Domain configuration - REQUIRED for HTTPS
+  DomainName:
+    Type: String
+    Description: Your domain name (e.g., example.com)
+    Default: ""
+  
+  EnableCustomDomain:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Set to "true" to configure custom domain with HTTPS
+  
   # These parameters will be automatically determined
   EnvironmentName:
     Type: String
@@ -24,6 +38,9 @@ Parameters:
       - test
       - prod
     Description: Environment type (dev, test, or prod)
+
+Conditions:
+  HasCustomDomain: !Equals [!Ref EnableCustomDomain, "true"]
 
 Resources:
   # VPC and Networking - Auto Created
@@ -192,6 +209,85 @@ Resources:
             Effect: Allow
             Resource: !Sub 'arn:aws:s3:::${WebsiteBucket}/*'
             Principal: '*'
+            
+  # SSL Certificate for custom domain
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      SubjectAlternativeNames:
+        - !Sub "*.${DomainName}"
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-certificate
+          
+  # CloudFront distribution for S3 website with HTTPS
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: HasCustomDomain
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DomainName
+          - !Sub "www.${DomainName}"
+        Origins:
+          - DomainName: !GetAtt WebsiteBucket.DomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+        Enabled: true
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: redirect-to-https
+          MinTTL: 0
+          DefaultTTL: 3600
+          MaxTTL: 86400
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        HttpVersion: http2
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        Tags:
+          - Key: Name
+            Value: !Sub ${AppName}-cloudfront
+            
+  # CloudFront Origin Access Identity
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Condition: HasCustomDomain
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "OAI for ${AppName} website"
+        
+  # Update bucket policy for CloudFront
+  WebsiteBucketPolicyForCloudFront:
+    Type: AWS::S3::BucketPolicy
+    Condition: HasCustomDomain
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:s3:::${WebsiteBucket}/*'
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
 
   # EFS for Shared Storage
   EFSSecurityGroup:
@@ -392,6 +488,16 @@ Outputs:
     Description: URL for the S3 website
     Value: !GetAtt WebsiteBucket.WebsiteURL
 
+  CloudFrontURL:
+    Description: URL for the CloudFront distribution (HTTPS)
+    Condition: HasCustomDomain
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+    
+  CustomDomainURL:
+    Description: Your custom domain URL (HTTPS)
+    Condition: HasCustomDomain
+    Value: !Sub "https://${DomainName}"
+
   ElasticBeanstalkURL:
     Description: URL for the Elastic Beanstalk environment
     Value: !GetAtt ElasticBeanstalkEnvironment.EndpointURL
@@ -403,3 +509,8 @@ Outputs:
   VPCId:
     Description: ID of the VPC
     Value: !Ref VPC
+    
+  CertificateValidationInfo:
+    Description: Certificate validation information - ADD THESE DNS RECORDS
+    Condition: HasCustomDomain
+    Value: !Sub "Please validate the domain by adding CNAME records shown in the ACM console for certificate ${Certificate}"
